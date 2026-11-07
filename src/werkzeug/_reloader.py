@@ -295,13 +295,32 @@ class WatchdogReloaderLoop(ReloaderLoop):
 
         self.name = f"watchdog ({reloader_name})"
         self.observer = Observer()
-        extra_patterns = (p for p in self.extra_files if not os.path.isdir(p))
+        extra_patterns: list[str] = []
+
+        for p in self.extra_files:
+            if os.path.isdir(p):
+                continue
+
+            extra_patterns.append(p)
+            extra_patterns.append(f"**/{PurePath(p).name}")
+
+        exclude_patterns: list[str] = []
+
+        for p in self.exclude_patterns:
+            if os.path.isabs(p) or p.startswith("**"):
+                exclude_patterns.append(p)
+            else:
+                exclude_patterns.extend((p, f"**/{p}"))
+
+        patterns = ["**/*.py", "**/*.pyc", "**/*.zip", *extra_patterns]
+        ignore_patterns = [
+            *[f"**/{d}/*" for d in _ignore_common_dirs],
+            *[f"**/{d}/**" for d in _ignore_common_dirs],
+            *exclude_patterns,
+        ]
         self.event_handler = EventHandler(
-            patterns=["*.py", "*.pyc", "*.zip", *extra_patterns],
-            ignore_patterns=[
-                *[f"*/{d}/*" for d in _ignore_common_dirs],
-                *self.exclude_patterns,
-            ],
+            patterns=patterns,
+            ignore_patterns=ignore_patterns,
         )
         self.should_reload = threading.Event()
 

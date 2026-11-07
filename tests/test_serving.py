@@ -168,6 +168,39 @@ def test_watchdog_reloader_ignores_closed_no_write(mock_trigger_reload: Mock) ->
     mock_trigger_reload.assert_not_called()
 
 
+@patch.object(WatchdogReloaderLoop, "trigger_reload")
+def test_watchdog_reloader_nested_files(mock_trigger_reload: Mock) -> None:
+    pytest.importorskip("watchdog")
+    from watchdog.events import EVENT_TYPE_MODIFIED
+    from watchdog.events import FileModifiedEvent
+
+    reloader = WatchdogReloaderLoop(extra_files=["templates/index.html"])
+
+    for path in (
+        "sub/fake.py",
+        "/abs/path/sub/fake.py",
+        "templates/index.html",
+        "/abs/path/templates/index.html",
+    ):
+        mock_trigger_reload.reset_mock()
+        event = FileModifiedEvent(path)
+        event.event_type = EVENT_TYPE_MODIFIED
+        reloader.event_handler.dispatch(event)
+        mock_trigger_reload.assert_called_once()
+
+    for path in (
+        "sub/__pycache__/fake.cpython-311.pyc",
+        "/abs/path/__pycache__/fake.cpython-311.pyc",
+        "sub/.git/HEAD",
+        "other.txt",
+    ):
+        mock_trigger_reload.reset_mock()
+        event = FileModifiedEvent(path)
+        event.event_type = EVENT_TYPE_MODIFIED
+        reloader.event_handler.dispatch(event)
+        mock_trigger_reload.assert_not_called()
+
+
 @pytest.mark.parametrize("find", [_find_stat_paths, _find_watchdog_paths])
 def test_exclude_patterns(
     find: t.Callable[[set[str], set[str]], cabc.Iterable[str]],
